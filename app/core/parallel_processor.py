@@ -6,7 +6,7 @@
 import asyncio
 from app.config import Config
 from app.core.db_manager import DBManager
-from app.handlers import OrderHandlerFactory, StandardOrderHandler
+from app.handlers import OrderHandlerFactory, StandardOrderHandler, BooksOrderHandler
 from app.models.order_status import OrderStatus, IssueResult
 from app.utils.logger import log_info, log_debug, log_warning, log_error, log_separator
 
@@ -65,7 +65,7 @@ class ParallelOrderProcessor:
         # 最初のページに遷移
         try:
             await page.goto(Config.PURCHASE_HISTORY_URL, timeout=30000)
-            await page.wait_for_load_state("networkidle", timeout=15000)
+            await page.wait_for_load_state("domcontentloaded", timeout=15000)
         except Exception as e:
             log_warning(f"[W{worker_id}] 初期ページ読み込みタイムアウト: {e}")
         await asyncio.sleep(2)
@@ -135,17 +135,25 @@ class ParallelOrderProcessor:
             try:
                 # 現在のページに戻る
                 await page.goto(current_url)
-                await page.wait_for_load_state("networkidle")
+                # networkidle -> domcontentloaded に緩和
+                await page.wait_for_load_state("domcontentloaded")
                 await asyncio.sleep(0.5)
 
-                # 詳細ページに遷移
-                if not await self._navigate_to_detail(page, order_id):
-                    log_warning(f"[W{worker_id}] 遷移失敗: {order_id}")
-                    errors += 1
-                    continue
+                # Books判定（一覧ページで処理できるか確認）
+                if await BooksOrderHandler.is_books_order(page, order_id):
+                    log_debug(f"[W{worker_id}] Books注文検出(一覧処理): {order_id}")
+                    issue_handler = BooksOrderHandler(page)
+                else:
+                    # 詳細ページに遷移
+                    if not await self._navigate_to_detail(page, order_id):
+                        log_warning(f"[W{worker_id}] 遷移失敗: {order_id}")
+                        errors += 1
+                        continue
 
-                # ハンドラ選択して発行
-                issue_handler = OrderHandlerFactory.create(page)
+                    # ハンドラ選択
+                    issue_handler = OrderHandlerFactory.create(page)
+
+                # 発行処理
                 result = await issue_handler.issue_receipt(order_id)
 
                 # DB更新
@@ -168,6 +176,15 @@ class ParallelOrderProcessor:
                 log_error(f"[W{worker_id}] エラー: {order_id} - {e}")
                 errors += 1
 
+        # 処理完了後、確実に一覧ページに戻る（ページネーションのため）
+        try:
+            if page.url != current_url:
+                await page.goto(current_url)
+                await page.wait_for_load_state("domcontentloaded")
+                await asyncio.sleep(1)
+        except Exception as e:
+            log_warning(f"[W{worker_id}] 一覧ページ復帰エラー: {e}")
+
         return processed, skipped, errors
 
     async def _navigate_to_detail(self, page, order_id: str) -> bool:
@@ -182,7 +199,7 @@ class ParallelOrderProcessor:
                 link = page.locator(selector).first
                 if await link.is_visible(timeout=2000):
                     await link.click()
-                    await page.wait_for_load_state("networkidle")
+                    await page.wait_for_load_state("domcontentloaded")
                     await asyncio.sleep(1)
                     return True
             except:
@@ -219,7 +236,7 @@ class ParallelOrderProcessor:
                         # クリック
                         try:
                             await btn.click(timeout=3000)
-                            await page.wait_for_load_state("networkidle")
+                            await page.wait_for_load_state("domcontentloaded")
                             await asyncio.sleep(2)
                             log_info(f"次のページへ遷移: {selector}")
                             return True

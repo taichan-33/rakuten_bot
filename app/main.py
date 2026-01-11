@@ -12,7 +12,7 @@ from app.core.order_processor import OrderProcessor
 from app.core.parallel_processor import ParallelOrderProcessor
 from app.core.db_manager import DBManager
 from app.utils.logger import log_info, log_warning, log_error, log_separator
-from app.utils.slack_notifier import SlackNotifier
+from app.services.slack_service import SlackService
 
 
 class RakutenBotApp:
@@ -20,7 +20,9 @@ class RakutenBotApp:
         Config.validate()
         self.browser_manager = BrowserManager()
         self.db_manager = DBManager()
-        self.slack_notifier = SlackNotifier(Config.SLACK_WEBHOOK_URL)
+        self.slack_service = SlackService(
+            Config.SLACK_BOT_TOKEN, Config.SLACK_CHANNEL_ID
+        )
         self._shutdown_requested = False
 
     def _setup_signal_handlers(self):
@@ -82,7 +84,7 @@ class RakutenBotApp:
 
                 # Slack通知
                 summary = self.db_manager.get_summary(since=start_time)
-                self.slack_notifier.send_report(summary, "report.csv")
+                self.slack_service.send_report(summary, "report.csv")
 
             except Exception as ex:
                 log_error(f"レポート出力/通知失敗: {ex}")

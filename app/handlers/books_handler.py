@@ -46,7 +46,7 @@ class BooksOrderHandler(OrderHandler):
                 link = self.page.locator(selector).first
                 if await link.is_visible(timeout=2000):
                     await link.click()
-                    await self.page.wait_for_load_state("networkidle")
+                    await self.page.wait_for_load_state("domcontentloaded")
                     await asyncio.sleep(1)
                     log_debug(f"[Books] 詳細遷移: {selector}")
                     return True
@@ -76,8 +76,9 @@ class BooksOrderHandler(OrderHandler):
                     "領収書リンクが見つからない(リトライ停止)"
                 )
 
-            await self.page.wait_for_load_state("networkidle")
-            await asyncio.sleep(3)  # 遷移待ち
+            # 遷移待ち (networkidleは除外)
+            await self.page.wait_for_load_state("domcontentloaded")
+            await asyncio.sleep(2)
 
             # デバッグ: 現在の状態を確認
             log_info(f"[Books] リンククリック後のURL: {self.page.url}")
@@ -103,9 +104,10 @@ class BooksOrderHandler(OrderHandler):
 
                 try:
                     await self.page.wait_for_load_state(
-                        "domcontentloaded", timeout=30000
+                        "domcontentloaded", timeout=60000
                     )
-                    await self.page.wait_for_load_state("networkidle", timeout=30000)
+                    # ポップアップ生成などでnetworkidleになるのを待つといつまでも終わらないことがある
+                    # await self.page.wait_for_load_state("networkidle", timeout=60000)
                 except:
                     log_warning(
                         "[Books] ページロード待機タイムアウト（処理は継続します）"
@@ -153,7 +155,7 @@ class BooksOrderHandler(OrderHandler):
         # ユーザー情報: input[value='領収書発行']
         btn_selector = "#receiptInputFormButton, button:has-text('発行する'), input[value='発行する'], input[value='領収書発行']"
         try:
-            # first() で特定し、wait_for で可視化を待つ
+            # first() で特定し、wait_for で可視化を待つ (60s)
             locator = self.page.locator(btn_selector).first
             await locator.wait_for(state="visible", timeout=60000)
             return locator
@@ -170,7 +172,12 @@ class BooksOrderHandler(OrderHandler):
                 await btn.click()
 
             page2 = await popup_info.value
-            await page2.wait_for_load_state("networkidle")
+            try:
+                await page2.wait_for_load_state("domcontentloaded", timeout=60000)
+            except Exception as e:
+                log_info(
+                    f"[Books] ページロード待機(popup)タイムアウトorエラー: {e} (ダウンロードは開始されている可能性があります)"
+                )
 
             result = await self._save_pdf_from_popup(page2, order_id)
             await page2.close()
@@ -219,7 +226,7 @@ class BooksOrderHandler(OrderHandler):
     async def _click_receipt_link(self, order_id: str = None) -> bool:
         """領収書リンクをクリック"""
         # ページ読み込みを待機
-        await self.page.wait_for_load_state("networkidle")
+        await self.page.wait_for_load_state("domcontentloaded")
         await asyncio.sleep(2)
 
         selectors = []

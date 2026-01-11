@@ -7,7 +7,8 @@ load_dotenv()
 class Config:
     USER_ID = os.getenv("RAKUTEN_USER_ID")
     PASSWORD = os.getenv("RAKUTEN_PASSWORD")
-    SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
+    SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
+    SLACK_CHANNEL_ID = os.getenv("SLACK_CHANNEL_ID")
     HEADLESS = os.getenv("HEADLESS", "true").lower() == "true"
     DOWNLOAD_DIR = os.path.join(os.getcwd(), "downloads")
     RECEIPT_ADDRESSEE = os.getenv("RECEIPT_ADDRESSEE", "")

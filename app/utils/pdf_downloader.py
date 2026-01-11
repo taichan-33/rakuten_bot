@@ -115,7 +115,7 @@ class PdfDownloader:
         """ページからPDFをダウンロード"""
         try:
             # ページの読み込みを待機
-            await page.wait_for_load_state("load", timeout=15000)
+            await page.wait_for_load_state("load", timeout=120000)
             await asyncio.sleep(2)
 
             pdf_url = page.url
