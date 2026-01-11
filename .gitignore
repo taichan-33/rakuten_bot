@@ -1,0 +1,28 @@
+# Environment Variables
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment
+venv/
+env/
+.venv/
+
+# Pytest
+.pytest_cache/
+
+# Mac OS
+.DS_Store
+
+# Project Specific
+data.db
+downloads/
+logs/
+*.log
+*.csv
+debug_*.html
+
