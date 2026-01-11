@@ -14,7 +14,7 @@ from app.utils.logger import log_info, log_debug, log_warning, log_error, log_se
 class OrderProcessor:
     """注文処理のオーケストレーター"""
 
-    MAX_ORDER_RETRY = 3  # 3回リトライ後にNO_RECEIPT
+    MAX_ORDER_RETRY = 3  # 最大リトライ回数
 
     def __init__(self, page, db_manager: DBManager):
         self.page = page
@@ -152,15 +152,18 @@ class OrderProcessor:
                 log_warning(f"リトライ対象: {result.error_message}")
                 continue
 
-        # 最大リトライ到達 → NO_RECEIPTに変更
-        final_result = IssueResult.no_receipt(
-            f"{self.MAX_ORDER_RETRY}回リトライ失敗: {result.error_message if result else '不明'}"
-        )
+        # 最大リトライ到達 → RETRYとして保存（次回実行時にまたリトライするため）
+        # ただし、DBManager側で総リトライ回数が上限を超えたらERRORになる
+        msg = f"{self.MAX_ORDER_RETRY}回リトライ失敗: {result.error_message if result else '不明'}"
+        log_warning(f"最大リトライ回数到達: {order_id} -> 次回以降に持ち越し")
+
+        final_result = IssueResult.retry(msg)
+
         self.db.update_order(
             order_id,
-            OrderStatus.NO_RECEIPT.value,
+            OrderStatus.RETRY.value,
             error_message=final_result.error_message,
-            increment_retry=True,
+            increment_retry=True,  # ここでDBのretry_countを+1
             order_number=order_number,
         )
         return final_result

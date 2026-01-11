@@ -12,6 +12,7 @@ from app.core.order_processor import OrderProcessor
 from app.core.parallel_processor import ParallelOrderProcessor
 from app.core.db_manager import DBManager
 from app.utils.logger import log_info, log_warning, log_error, log_separator
+from app.utils.slack_notifier import SlackNotifier
 
 
 class RakutenBotApp:
@@ -19,6 +20,7 @@ class RakutenBotApp:
         Config.validate()
         self.browser_manager = BrowserManager()
         self.db_manager = DBManager()
+        self.slack_notifier = SlackNotifier(Config.SLACK_WEBHOOK_URL)
         self._shutdown_requested = False
 
     def _setup_signal_handlers(self):
@@ -40,7 +42,8 @@ class RakutenBotApp:
     async def run(self):
         from datetime import datetime
 
-        start_time = datetime.now().isoformat()
+        # DBのフォーマットに合わせる ("%Y-%m-%d %H:%M:%S")
+        start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         self._setup_signal_handlers()
 
@@ -73,6 +76,17 @@ class RakutenBotApp:
         except Exception as e:
             log_error(f"アプリケーションエラーが発生しました: {e}")
         finally:
+            # 完了・中断・エラーに関わらずレポートを出力
+            try:
+                self.db_manager.export_report(since=start_time)
+
+                # Slack通知
+                summary = self.db_manager.get_summary(since=start_time)
+                self.slack_notifier.send_report(summary, "report.csv")
+
+            except Exception as ex:
+                log_error(f"レポート出力/通知失敗: {ex}")
+
             self._cleanup()
 
     def _cleanup(self):

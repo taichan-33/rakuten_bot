@@ -118,7 +118,9 @@ class BooksOrderHandler(OrderHandler):
             if not btn:
                 # デバッグ用HTML保存
                 try:
-                    with open(f"debug_books_failed_{order_id}.html", "w") as f:
+                    with open(
+                        f"debug_books_failed_{order_id}.html", "w", encoding="utf-8"
+                    ) as f:
                         f.write(await self.page.content())
                     log_info(f"デバッグHTML保存: debug_books_failed_{order_id}.html")
                 except:
